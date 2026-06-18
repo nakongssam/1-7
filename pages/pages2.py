@@ -1,6 +1,7 @@
 import streamlit as st
 import random
 import time
+import math
 import pandas as pd
 
 # 페이지 기본 설정
@@ -8,228 +9,188 @@ st.set_page_config(page_title="청소 당번 룰렛", page_icon="🧹", layout="
 
 # 메인 타이틀
 st.title("🧹 두근두근 청소 당번 룰렛")
-st.write("누가 어떤 구역을 맡게 될까요? 공정하고 재미있게 오늘의 당번을 뽑아보세요!")
+st.write("메인 화면에서 명단을 입력하고 바로 룰렛을 돌려보세요!")
 
-# 사이드바: 설정 입력
-with st.sidebar:
-    st.header("⚙️ 룰렛 설정")
-    st.write("명단과 구역을 쉼표(,)로 구분하여 입력해주세요.")
-    
-    # 기본값은 학교 교실에 맞게 설정되어 있습니다.
+# 메인 화면 내 입력 메뉴 (2열 구성)
+col1, col2 = st.columns(2)
+
+with col1:
     default_students = "김학생, 이학생, 박학생, 최학생, 정학생, 강학생, 조학생, 윤학생"
-    students_input = st.text_area("👥 대상자 명단", value=default_students, height=100)
-    
-    default_tasks = "칠판 닦기, 분리수거, 바닥 쓸기, 복도 청소"
-    tasks_input = st.text_area("🗑️ 청소 구역", value=default_tasks, height=100)
-    
-    st.info("💡 **안내:** 대상자 수가 청소 구역 수보다 많으면 남은 인원은 '휴식'으로 자동 배정됩니다.")
+    students_input = st.text_area("👥 대상자 명단 (쉼표로 구분)", value=default_students, height=120)
 
-# 입력값 전처리 (공백 제거 및 리스트화)
+with col2:
+    default_tasks = "칠판 닦기, 분리수거, 바닥 쓸기, 복도 청소"
+    tasks_input = st.text_area("🗑️ 청소 구역 (쉼표로 구분)", value=default_tasks, height=120)
+
+st.caption("💡 **안내:** 인원이 구역보다 많으면 남은 사람은 '✨ 휴식 (면제)'으로 자동 배정됩니다.")
+
+# 입력값 전처리
 try:
     students = [s.strip() for s in students_input.split(",") if s.strip()]
     tasks = [t.strip() for t in tasks_input.split(",") if t.strip()]
 except Exception as e:
-    st.error(f"입력값을 처리하는 중 오류가 발생했습니다: {e}")
+    st.error(f"입력값 처리 중 오류 발생: {e}")
     students, tasks = [], []
 
-# 시각적 룰렛 HTML/CSS/JS 생성 함수
-def get_wheel_html(student_names, winner_index):
-    """원형 룰렛을 생성하는 HTML/CSS/JS 문자열을 반환합니다."""
+# SVG 기반 룰렛 HTML 생성 함수 (크기: 300px로 축소)
+def generate_wheel_html(student_list, final_spin_angle):
+    n = len(student_list)
+    angle_per_seg = 360 / n
     
-    # 세그먼트 수
-    num_students = len(student_names)
-    angle_per_segment = 360 / num_students
-    
-    # 색상 리스트 (최대 20명, 반복 사용)
+    # 화사하고 직관적인 고유 색상 스펙트럼
     colors = [
-        "#f44336", "#e91e63", "#9c27b0", "#673ab7", "#3f51b5",
-        "#2196f3", "#03a9f4", "#00bcd4", "#009688", "#4caf50",
-        "#8bc34a", "#cddc39", "#ffeb3b", "#ffc107", "#ff9800",
-        "#ff5722", "#795548", "#9e9e9e", "#607d8b", "#333333"
+        "#FF6B6B", "#4DABF7", "#20C997", "#FFD43B", "#A07EED", 
+        "#FF922B", "#38D9A9", "#66d9ff", "#FAA2C1", "#63E6BE",
+        "#FF8787", "#748FFC", "#94D82D", "#ffd8a8", "#E599F7"
     ]
     
-    # HTML 구성
-    html_content = f"""
+    svg_paths = ""
+    for i, name in enumerate(student_list):
+        color = colors[i % len(colors)]
+        start_deg = i * angle_per_seg
+        end_deg = (i + 1) * angle_per_seg
+        mid_deg = (start_deg + end_deg) / 2
+        
+        # 부채꼴 좌표 계산 (중심 150, 150 / 반지름 140)
+        # 단, SVG는 오른쪽(3시 방향)이 0도이므로 각도 그대로 적용
+        rad_start = math.radians(start_deg)
+        rad_end = math.radians(end_deg)
+        
+        x1 = 150 + 140 * math.cos(rad_start)
+        y1 = 150 + 140 * math.sin(rad_start)
+        x2 = 150 + 140 * math.cos(rad_end)
+        y2 = 150 + 140 * math.sin(rad_end)
+        
+        # 큰 호 플래그 설정 (인원이 1명 또는 2명일 때 예외 방지)
+        large_arc = 1 if angle_per_seg > 180 else 0
+        
+        # 부채꼴 패스 생성
+        svg_paths += f'<path d="M 150 150 L {x1} {y1} A 140 140 0 {large_arc} 1 {x2} {y2} Z" fill="{color}" stroke="#ffffff" stroke-width="2"/>\n'
+        
+        # 부채꼴 내부 텍스트 레이아웃 (반지름 방향 배치)
+        svg_paths += f'<text x="260" y="154" transform="rotate({mid_deg}, 150, 150)" text-anchor="end" fill="#ffffff" font-size="13px" font-weight="bold">{name}</text>\n'
+
+    html_markup = f"""
     <style>
-        .roulette-container {{
+        .roulette-box {{
             position: relative;
-            width: 400px;
-            height: 400px;
-            margin: 20px auto;
-        }}
-        .wheel {{
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            border-radius: 50%;
-            overflow: hidden;
-            border: 5px solid #ccc;
-            box-shadow: 0 0 10px rgba(0,0,0,0.2);
-            transition: transform 5s cubic-bezier(0.1, 0.7, 0.2, 1); /* 부드러운 감속 */
+            width: 300px;
+            height: 300px;
+            margin: 30px auto;
         }}
         .pointer {{
             position: absolute;
-            top: -20px;
+            top: -18px;
             left: 50%;
             transform: translateX(-50%);
             width: 0;
             height: 0;
-            border-left: 20px solid transparent;
-            border-right: 20px solid transparent;
-            border-top: 30px solid #f44336; /* 빨간색 포인터 */
-            z-index: 10;
+            border-left: 12px solid transparent;
+            border-right: 12px solid transparent;
+            border-top: 22px solid #E63946; /* 상단 고정 빨간 바늘 */
+            z-index: 99;
+            filter: drop-shadow(0px 2px 3px rgba(0,0,0,0.3));
         }}
-        .segment {{
-            position: absolute;
-            top: 0;
-            left: 0;
+        .wheel-canvas {{
             width: 100%;
             height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transform-origin: 50% 50%;
-        }}
-        .segment-content {{
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
-            font-weight: bold;
-            font-size: 16px;
-            color: white;
-            writing-mode: vertical-rl; /* 세로 텍스트 */
-            text-orientation: upright;
-            padding-bottom: 70px; /* 원 바깥으로 이동 */
+            border-radius: 50%;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            transition: transform 4s cubic-bezier(0.1, 0.8, 0.1, 1);
         }}
     </style>
-    
-    <div class="roulette-container">
+    <div class="roulette-box">
         <div class="pointer"></div>
-        <div class="wheel" id="wheel">
-    """
-    
-    # 세그먼트 생성
-    for i, name in enumerate(student_names):
-        color = colors[i % len(colors)]
-        angle = angle_per_segment * i
-        html_content += f"""
-            <div class="segment" style="transform: rotate({angle}deg); background-color: {color};">
-                <span class="segment-content">{name}</span>
-            </div>
-        """
-        
-    html_content += """
+        <div class="wheel-canvas" id="wheel">
+            <svg width="300" height="300" viewBox="0 0 300 300">
+                <circle cx="150" cy="150" r="142" fill="#e0e0e0"/>
+                {svg_paths}
+                <circle cx="150" cy="150" r="15" fill="#ffffff" filter="drop-shadow(0px 1px 3px rgba(0,0,0,0.2))"/>
+            </svg>
         </div>
     </div>
     <script>
-        // Python에서 미리 계산된 최종 각도
-        var finalAngle = Python.get_final_angle(); 
-        
-        // 룰렛 회전 애니메이션 실행
-        setTimeout(function() {
-            var wheel = document.getElementById('wheel');
-            // 부드러운 회전을 위해 여러 바퀴 돌림 (360 * 10 = 3600도) + 최종 각도
-            wheel.style.transform = 'rotate(' + (360 * 10 + finalAngle) + 'deg)'; 
-        }, 100);
+        setTimeout(function() {{
+            var element = document.getElementById('wheel');
+            element.style.transform = 'rotate({final_spin_angle}deg)';
+        }}, 150);
     </script>
     """
-    return html_content
+    return html_markup
 
-# 세션 상태 초기화 (결과 저장을 위해)
-if 'result_df' not in st.session_state:
-    st.session_state['result_df'] = None
-if 'show_wheel' not in st.session_state:
-    st.session_state['show_wheel'] = False
-if 'student_names' not in st.session_state:
-    st.session_state['student_names'] = []
-if 'winner_index' not in st.session_state:
-    st.session_state['winner_index'] = -1
+# 세션 상태 초기화
+if 'assigned_df' not in st.session_state:
+    st.session_state['assigned_df'] = None
+if 'trigger_animation' not in st.session_state:
+    st.session_state['trigger_animation'] = False
+if 'current_students' not in st.session_state:
+    st.session_state['current_students'] = []
+if 'computed_angle' not in st.session_state:
+    st.session_state['computed_angle'] = 0
 
-
-# 메인 화면: 룰렛 실행 버튼
+# 실행 버튼
 if st.button("🎲 룰렛 돌리기!", type="primary", use_container_width=True):
-    # 예외 처리: 입력값이 비어있는 경우
     if not students or not tasks:
-        st.warning("⚠️ 대상자 명단과 청소 구역을 모두 입력해주세요!")
-        st.session_state['result_df'] = None
-        st.session_state['show_wheel'] = False
-    # 예외 처리: 구역이 사람보다 많은 경우
+        st.warning("⚠️ 대상자 명단과 청소 구역을 입력해 주세요.")
+        st.session_state['trigger_animation'] = False
     elif len(students) < len(tasks):
-        st.error(f"⚠️ 청소 구역({len(tasks)}개)이 대상자 수({len(students)}명)보다 많습니다. 인원을 더 추가하거나 구역을 줄여주세요.")
-        st.session_state['result_df'] = None
-        st.session_state['show_wheel'] = False
+        st.error(f"⚠️ 구역 수({len(tasks)}개)가 인원({len(students)}명)보다 많습니다. 명단을 늘리거나 구역을 줄여주세요.")
+        st.session_state['trigger_animation'] = False
     else:
-        # 애니메이션 상태 활성화
-        st.session_state['show_wheel'] = True
-        
-        # 1. 대상자 무작위 섞기
+        # 데이터 셔플 및 배정 결과 미리 계산
         random.shuffle(students)
-        st.session_state['student_names'] = students
+        st.session_state['current_students'] = students
         
-        # 2. 당번 배정 logic
-        assignments = []
-        for i in range(len(tasks)):
-            assignments.append({"청소 구역": tasks[i], "담당자": students[i]})
-        for i in range(len(tasks), len(students)):
-            assignments.append({"청소 구역": "✨ 휴식 (면제)", "담당자": students[i]})
+        final_list = []
+        for idx in range(len(tasks)):
+            final_list.append({"청소 구역": tasks[idx], "담당자": students[idx]})
+        for idx in range(len(tasks), len(students)):
+            final_list.append({"청소 구역": "✨ 휴식 (면제)", "담당자": students[idx]})
             
-        # 데이터프레임 생성 및 저장
-        st.session_state['result_df'] = pd.DataFrame(assignments)
+        st.session_state['assigned_df'] = pd.DataFrame(final_list)
         
-        # 3. 시각적 '승자' (포인터가 가리킬 사람) 인덱스 결정 (첫 번째 비휴식 사람)
-        # 휴식 없이 모두 당번일 경우 첫 번째 사람이 승자
-        winner_idx = 0
-        for i in range(len(tasks), len(students)):
-             if st.session_state['result_df'].iloc[i]["청소 구역"] != "✨ 휴식 (면제)":
-                winner_idx = i
-                break
-        st.session_state['winner_index'] = winner_idx
+        # 룰렛 바늘이 12시 방향(270도)에 위치하므로, 당선될 사람의 각도를 계산하여 매칭
+        # 회전 후 당선자 칸의 중심이 정확히 270도 지점에 오도록 제어
+        total_peeps = len(students)
+        seg_width = 360 / total_peeps
         
+        # 첫 번째 구역(대장) 당번을 포인터가 가리킬 주인공으로 설정
+        target_winner_idx = 0 
+        mid_target_angle = (target_winner_idx * seg_width) + (seg_width / 2)
+        
+        # 시계방향 회전 보정 공식 적용
+        rotation_needed = 270 - mid_target_angle
+        total_spins = 360 * 8  # 8바퀴 힘차게 돌기
+        st.session_state['computed_angle'] = total_spins + rotation_needed
+        st.session_state['trigger_animation'] = True
 
-# 룰렛 애니메이션 출력
-if st.session_state['show_wheel']:
-    # Python에서 JS로 데이터를 넘기기 위한 임시 함수 정의 (Streamlit-specific hack)
-    # 이 부분은 이 앱 고유의 안정적인 방식입니다.
-    def get_final_angle_for_js():
-        """룰렛 포인터가 winner_index의 세그먼트를 가리키도록 최종 각도를 계산합니다."""
-        num_students = len(st.session_state['student_names'])
-        angle_per_segment = 360 / num_students
-        winner_idx = st.session_state['winner_index']
-        # 포인터는 상단에 있으므로, 세그먼트의 중간이 상단을 가리키도록 각도 계산
-        # 360 - (세그먼트 중간 각도) + 약간의 무작위 오차(0~세그먼트/4)
-        base_angle = 360 - (angle_per_segment * winner_idx + angle_per_segment / 2)
-        random_offset = random.uniform(-angle_per_segment / 4, angle_per_segment / 4)
-        return base_angle + random_offset
-
-    # HTML 룰렛 렌더링
-    st.write("---") # 구분선
+# 애니메이션 시각화 프레임 구현
+if st.session_state['trigger_animation']:
+    # 축소된 원형 룰렛 컴포넌트 출력
     st.components.v1.html(
-        get_wheel_html(st.session_state['student_names'], st.session_state['winner_index']),
-        height=600 # 룰렛 크기에 맞춰 충분한 높이 확보
+        generate_wheel_html(st.session_state['current_students'], st.session_state['computed_angle']),
+        height=350
     )
     
-    # 긴장감을 주는 로딩 애니메이션 및 대기
-    with st.spinner("운명의 룰렛이 돌아가는 중... 🌀"):
-        time.sleep(5) # JS 애니메이션 시간(5초)과 동일하게 대기
-
-    # 대기 후 결과 출력
-    df = st.session_state['result_df']
-    st.success("🎉 오늘의 청소 당번이 결정되었습니다!")
+    # 회전 시간과 동기화된 스피너 대기 효과
+    with st.spinner("운명의 룰렛이 도는 중... 🌀"):
+        time.sleep(4.2)
+        
+    # 결과 리포트 출력
+    df_result = st.session_state['assigned_df']
+    st.success("🎉 오늘의 청소 배정이 완료되었습니다!")
     st.balloons()
     
-    # 결과 표 출력 (인덱스 숨김)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df_result, use_container_width=True, hide_index=True)
     
-    # CSV 다운로드 기능
-    csv = df.to_csv(index=False).encode('utf-8-sig')
+    # 엑셀 호환 한글 파일 다운로드
+    csv_data = df_result.to_csv(index=False).encode('utf-8-sig')
     st.download_button(
-        label="📥 결과 다운로드 (CSV)",
-        data=csv,
-        file_name='오늘의_청소당번.csv',
-        mime='text/csv',
+        label="📥 배정 결과 CSV 다운로드",
+        data=csv_data,
+        file_name='오늘의_청소당번_결과.csv',
+        mime='text/csv'
     )
     
-    # visual 상태 초기화 (다음 클릭을 위해)
-    st.session_state['show_wheel'] = False
+    # 상태 리셋으로 연속 실행 보장
+    st.session_state['trigger_animation'] = False
